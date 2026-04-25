@@ -1,11 +1,25 @@
 version: '3.3'
 services:
+  db:
+    image: postgres:15-alpine
+    container_name: paycrypto_db
+    restart: always
+    environment:
+      POSTGRES_USER: user_paycrypto
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: paycrypto_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   backend:
     build: ./backend
     container_name: paycrypto_backend
-    volumes:
-      - ./backend:/app
     restart: always
+    environment:
+      - DATABASE_URL=postgresql://user_paycrypto:password123@db:5432/paycrypto_db
+    depends_on:
+      - db
+
   nginx:
     image: nginx:alpine
     container_name: paycrypto_nginx
@@ -17,3 +31,6 @@ services:
     depends_on:
       - backend
     restart: always
+
+volumes:
+  postgres_data:
