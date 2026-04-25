@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo: Pix para Cripto</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 20px; background: #f4f4f9; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px;}
+        input, select, button { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;}
+        button { background: #28a745; color: white; border: none; cursor: pointer; font-weight: bold;}
+        button:hover { background: #218838; }
+        .btn-info { background: #17a2b8; }
+        .btn-info:hover { background: #138496; }
+        .alert { background: #fff3cd; color: #856404; padding: 10px; border-radius: 4px; font-size: 0.9em; margin-bottom: 20px;}
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.9em; }
+        th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { background-color: #f8f9fa; }
+        .badge-pending { background: #ffc107; padding: 4px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold;}
+        .badge-paid { background: #28a745; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold;}
+        .qr-container { text-align: center; margin: 15px 0; }
+        .qr-container img { max-width: 200px; border: 5px solid #eee; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <div class="alert">
+        <strong>Atenção:</strong> Este é um ambiente de <b>DEMONSTRAÇÃO / PORTFÓLIO</b>. Nenhuma transação financeira real é realizada.
+    </div>
+    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 300px;">
+            <div class="card" id="step-1">
+                <h2>1. Simulação</h2>
+                <input type="number" id="brlAmount" placeholder="Valor em BRL (Ex: 100)" value="100" onkeyup="simulateQuote()" onchange="simulateQuote()">
+                <select id="cryptoAsset" onchange="simulateQuote()">
+                    <option value="USDT">USDT (Tether)</option>
+                    <option value="BTC">Bitcoin</option>
+                </select>
+                <div id="quoteResult" style="background: #e9ecef; padding: 10px; border-radius: 4px; margin-bottom: 10px; display: none;">
+                    Cotação Binance: 1 <span id="lblCryptoName"></span> = R$ <span id="lblRate"></span><br>
+                    Você receberá aprox: <b><span id="lblEstimated"></span> <span id="lblCryptoName2"></span></b>
+                </div>
+                <input type="text" id="walletAddress" placeholder="Endereço da Carteira Destino" value="0xDemoWalletAddress123">
+                <button onclick="createOrder()">Gerar Ordem Pix</button>
+            </div>
+            <div class="card" id="step-2" style="display: none; text-align: center;">
+                <h2>2. Pagamento Pix</h2>
+                <p>Ordem: <strong id="lblOrderCode"></strong></p>
+                <p>Escaneie o QR Code abaixo com o aplicativo do seu banco:</p>
+                <div class="qr-container"><img id="pixQrCode" src="" alt="QR Code Pix"></div>
+                <p style="font-size: 0.8em; color: #555; text-align: left; margin-bottom: 2px;">Pix Copia e Cola:</p>
+                <input type="text" id="pixCopiaCola" readonly style="background: #e9ecef; cursor: text; text-align: center; font-family: monospace; font-size: 0.8em; color: #555;">
+                <button onclick="copyPix()" style="background: #6c757d; margin-top: 0px; margin-bottom: 20px;">Copiar Código</button>
+                <button class="btn-info" onclick="simulatePixPay()">Simular Pagamento Confirmado</button>
+            </div>
+            <div class="card" id="step-3" style="display: none; text-align: center;">
+                <h2>🎉 Sucesso!</h2>
+                <p>O Pix foi confirmado e a transferência da cripto foi iniciada!</p>
+                <div style="background: #e9ecef; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                    <p style="margin: 0; font-size: 0.9em;">Hash da Transação (Blockchain):</p>
+                    <small id="lblTxHash" style="word-wrap: break-word; color: #0056b3; font-family: monospace; font-weight: bold;"></small>
+                </div>
+                <button onclick="location.reload()">Fazer Nova Simulação</button>
+            </div>
+        </div>
+        <div style="flex: 1; min-width: 350px;">
+            <div class="card">
+                <h2>Histórico de Transações</h2>
+                <button style="background: #007bff; margin-bottom: 10px;" onclick="loadHistory()">Atualizar Tabela</button>
+                <table>
+                    <thead>
+                        <tr><th>Ordem</th><th>BRL</th><th>Cripto</th><th>Status</th></tr>
+                    </thead>
+                    <tbody id="historyTableBody">
+                        <tr><td colspan="4" style="text-align: center;">Carregando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <script>
+        let currentOrderCode = "";
+        async function simulateQuote() {
+            const amount = parseFloat(document.getElementById('brlAmount').value);
+            const crypto = document.getElementById('cryptoAsset').value;
+            if (!amount) return;
+            const response = await fetch('/api/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount_brl: amount, crypto: crypto }) });
+            const data = await response.json();
+            document.getElementById('lblCryptoName').innerText = data.crypto_asset;
+            document.getElementById('lblCryptoName2').innerText = data.crypto_asset;
+            document.getElementById('lblRate').innerText = data.exchange_rate;
+            document.getElementById('lblEstimated').innerText = data.estimated_crypto;
+            document.getElementById('quoteResult').style.display = 'block';
+        }
+        async function createOrder() {
+            const amount = parseFloat(document.getElementById('brlAmount').value);
+            const crypto = document.getElementById('cryptoAsset').value;
+            const address = document.getElementById('walletAddress').value;
+            const response = await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount_brl: amount, crypto: crypto, address: address }) });
+            const data = await response.json();
+            currentOrderCode = data.order_code;
+            document.getElementById('lblOrderCode').innerText = currentOrderCode;
+            const fakePixPayload = "00020101021226580014br.gov.bcb.pix0136" + currentOrderCode + "5204000053039865405" + amount.toFixed(2) + "5802BR5913DemoPortfolio6009SaoPaulo62070503***6304ABCD";
+            document.getElementById('pixQrCode').src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(fakePixPayload)}`;
+            document.getElementById('pixCopiaCola').value = fakePixPayload;
+            document.getElementById('step-1').style.display = 'none';
+            document.getElementById('step-2').style.display = 'block';
+            loadHistory();
+        }
+        function copyPix() {
+            const copyText = document.getElementById("pixCopiaCola");
+            copyText.select();
+            document.execCommand("copy");
+            alert("Código Pix Copiado!");
+        }
+        async function simulatePixPay() {
+            const response = await fetch(`/api/orders/${currentOrderCode}/pay`, { method: 'POST' });
+            const data = await response.json();
+            document.getElementById('lblTxHash').innerText = data.tx_hash;
+            document.getElementById('step-2').style.display = 'none';
+            document.getElementById('step-3').style.display = 'block';
+            loadHistory();
+        }
+        async function loadHistory() {
+            const response = await fetch('/api/orders');
+            const orders = await response.json();
+            const tbody = document.getElementById('historyTableBody');
+            tbody.innerHTML = '';
+            if(orders.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Nenhuma ordem encontrada.</td></tr>';
+                return;
+            }
+            orders.forEach(order => {
+                const statusClass = order.pix_status === 'PAID' ? 'badge-paid' : 'badge-pending';
+                tbody.innerHTML += `<tr><td><small>${order.order_code}</small></td><td>R$ ${order.fiat_amount_brl.toFixed(2)}</td><td>${order.crypto_asset}</td><td><span class="${statusClass}">${order.pix_status}</span></td></tr>`;
+            });
+        }
+        window.onload = () => { simulateQuote(); loadHistory(); };
+    </script>
+</body>
+</html>
